@@ -4,3 +4,4 @@ Modern search engines are increasingly using artificial intelligence to process 
 
 Using:
 Supabase for Auth / Databases
+-- This is currently in progress, working on setting up OAuth
