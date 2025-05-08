@@ -1,20 +1,45 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
 export default function HomePage() {
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
+  const redirected = useRef(false)
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        router.push('/dashboard')
-      } else {
-        router.push('/login')
+      try {
+        // If we've already redirected, don't check again
+        if (redirected.current) return
+        
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Session error:', error)
+          redirected.current = true
+          router.push('/login')
+          return
+        }
+
+        if (session) {
+          redirected.current = true
+          router.push('/dashboard')
+        } else {
+          redirected.current = true
+          router.push('/login')
+        }
+      } catch (err) {
+        console.error('Unexpected error during session check:', err)
+        if (!redirected.current) {
+          redirected.current = true
+          router.push('/login')
+        }
+      } finally {
+        setIsLoading(false)
       }
     }
 

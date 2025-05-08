@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Team, TeamMember } from '@/lib/supabase'
@@ -19,6 +19,7 @@ export default function DashboardLayout({
   const [userTeams, setUserTeams] = useState<Team[]>([])
   const [userRole, setUserRole] = useState<'admin' | 'member' | null>(null)
   const [loading, setLoading] = useState(true)
+  const redirected = useRef(false)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -26,7 +27,10 @@ export default function DashboardLayout({
         const { data: { session } } = await supabase.auth.getSession()
         
         if (!session) {
-          router.push('/login')
+          if (!redirected.current) {
+            redirected.current = true
+            router.push('/login')
+          }
           return
         }
 
@@ -55,12 +59,23 @@ export default function DashboardLayout({
         setLoading(false)
       } catch (error) {
         console.error('Error fetching user data:', error)
-        router.push('/login')
+        if (!redirected.current) {
+          redirected.current = true
+          router.push('/login')
+        }
       }
     }
 
     fetchUserData()
   }, [router])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    if (!redirected.current) {
+      redirected.current = true
+      router.push('/login')
+    }
+  }
 
   if (loading) {
     return <div>Loading...</div>
@@ -84,7 +99,7 @@ export default function DashboardLayout({
                 </div>
               )}
               <button
-                onClick={() => supabase.auth.signOut()}
+                onClick={handleSignOut}
                 className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
               >
                 Sign out

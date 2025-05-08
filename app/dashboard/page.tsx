@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Team } from '@/lib/supabase'
@@ -23,20 +23,43 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [newTeamName, setNewTeamName] = useState('')
   const [isCreatingTeam, setIsCreatingTeam] = useState(false)
+  const redirected = useRef(false)
 
   useEffect(() => {
+    console.log('Dashboard page mounted')
+    
     const fetchUserData = async () => {
+      console.log('Fetching user data...')
       try {
+        // First check if we have a session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) throw sessionError
         
-        if (!session) {
-          router.push('/login')
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          if (!redirected.current) {
+            redirected.current = true
+            router.push('/login')
+          }
           return
         }
 
+        if (!session) {
+          console.log('No session found, redirecting to login')
+          if (!redirected.current) {
+            redirected.current = true
+            router.push('/login')
+          }
+          return
+        }
+
+        console.log('Session found:', {
+          user: session.user.email,
+          expires_at: new Date(session.expires_at! * 1000).toISOString()
+        })
         setUser(session.user)
 
+        // Then fetch the teams
+        console.log('Fetching teams...')
         const { data: teamMembers, error: teamsError } = await supabase
           .from('team_members')
           .select(`
@@ -50,25 +73,51 @@ export default function DashboardPage() {
           `)
           .eq('user_id', session.user.id)
 
-        if (teamsError) throw teamsError
+        if (teamsError) {
+          console.error('Teams error:', teamsError)
+          throw teamsError
+        }
 
         if (teamMembers) {
+          console.log('Teams fetched:', teamMembers.length)
           setTeams((teamMembers as unknown as TeamMemberWithTeam[]).map(tm => tm.teams))
         }
       } catch (error) {
-        console.error('Error fetching user data:', error)
-        router.push('/login')
+        console.error('Error in fetchUserData:', error)
+        // Don't redirect on error, just show the error state
       } finally {
         setLoading(false)
       }
     }
 
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', {
+        event,
+        user: session?.user?.email,
+        timestamp: new Date().toISOString()
+      })
+      
+      if (event === 'SIGNED_OUT' && !redirected.current) {
+        console.log('User signed out, redirecting to login...')
+        redirected.current = true
+        router.push('/login')
+      }
+    })
+
     fetchUserData()
+
+    // Cleanup subscription
+    return () => {
+      console.log('Dashboard page unmounting, cleaning up...')
+      subscription.unsubscribe()
+    }
   }, [router])
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
 
+    console.log('Creating new team:', newTeamName)
     try {
       setIsCreatingTeam(true)
 
@@ -92,6 +141,7 @@ export default function DashboardPage() {
 
       if (memberError) throw memberError
 
+      console.log('Team created successfully:', team)
       // Refresh the teams list
       setTeams([...teams, team])
       setNewTeamName('')
@@ -103,6 +153,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
+    console.log('Dashboard in loading state')
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
@@ -113,6 +164,7 @@ export default function DashboardPage() {
     )
   }
 
+  console.log('Rendering dashboard content')
   return (
     <div className="space-y-6">
       <Card>
