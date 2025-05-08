@@ -5,10 +5,34 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
+    storage: {
+      getItem: (key) => {
+        if (typeof window === 'undefined') return null
+        try {
+          const item = window.localStorage.getItem(key)
+          return item ? JSON.parse(item) : null
+        } catch (error) {
+          return null
+        }
+      },
+      setItem: (key, value) => {
+        if (typeof window === 'undefined') return
+        try {
+          window.localStorage.setItem(key, JSON.stringify(value))
+        } catch (error) {
+          console.error('Error setting auth storage:', error)
+        }
+      },
+      removeItem: (key) => {
+        if (typeof window === 'undefined') return
+        try {
+          window.localStorage.removeItem(key)
+        } catch (error) {
+          console.error('Error removing auth storage:', error)
+        }
+      },
+    },
   },
 })
 
